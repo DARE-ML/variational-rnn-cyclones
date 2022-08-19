@@ -1,2 +1,1 @@
-# variational-rnn-cyclones
-Variational RNNs for cyclone track prediction
+# Variational RNNs for cyclone track prediction

@@ -65,14 +65,4 @@ class BayesRNN(nn.Module):
             self.w_ih.log_variational_posterior + 
             self.w_hh.log_variational_posterior +
             self.w_ho.log_variational_posterior
-        )  
-    
-    def testing(self, input, samples=constants.SAMPLES):
-        batch_size, sequence_size = list(input.size())[0],list(input.size())[1]
-        Outputs = torch.zeros(samples, batch_size, self.output_dim, 2)
-        MSE_loss = []
-        Loss = nn.MSELoss()
-        for i in range(samples):
-            Outputs[i] = self(input, sampling = True)
-        return Outputs
-        
+        )

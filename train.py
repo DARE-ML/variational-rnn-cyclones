@@ -1,7 +1,7 @@
 import torch
 
 from varnn.model.bayes_rnn import BayesRNN
-from varnn.utils.losses import SamplingLoss
+from varnn.utils.markov_sampler import MarkovSampler
 
 # Dimensions
 input_dim = 3
@@ -18,9 +18,14 @@ X = torch.rand(batch_size, seq_len, input_dim)
 y = torch.rand(batch_size, output_dim)
 
 # Predict
-sampling_loss = SamplingLoss(brnn)
-loss, mse_loss, outputs = sampling_loss(X, y, num_batches=1)
+sampler = MarkovSampler(brnn)
 
+# During Training
+loss, mse_loss, outputs = sampler(X, y, num_batches=1, testing=False)
 print(loss)
 print(mse_loss)
+print(outputs.shape)
+
+# During Testing
+outputs = sampler(X, y, num_batches=1, testing=True)
 print(outputs.shape)

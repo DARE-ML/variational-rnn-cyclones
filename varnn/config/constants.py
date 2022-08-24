@@ -1,0 +1,4 @@
+PI = 0.5
+SIGMA1 = 6
+SIGMA2 = 6
+SAMPLES = 100

@@ -10,7 +10,7 @@ from torch.utils.data import Dataset
 
 class CycloneTracksDataset(Dataset):
 
-    def __init__(self, ds_name, root_dir, train, window_size=4, dims=(1, 2, 3)):
+    def __init__(self, ds_name, data_dir, train, window_size=4, dims=(1, 2, 3)):
         # Initialize
         super(CycloneTracksDataset, self).__init__()
         self.ds_name = ds_name
@@ -22,12 +22,13 @@ class CycloneTracksDataset(Dataset):
             self.data_split = 'test'
 
         # Load data config
-        config_yml_path = os.path.join(root_dir, 'data', 'config.yml')
+        config_yml_path = os.path.join(data_dir, 'config.yml')
         with open(config_yml_path, 'r') as config_file:
             self.data_config = yaml.safe_load(config_file)[self.ds_name]
 
         # Load mat file
-        self.data = sio.loadmat(self.data_config[self.data_split])[f'cyclones_{self.data_split}'][0]
+        data_path = os.path.join(data_dir, self.data_config[self.data_split])
+        self.data = sio.loadmat(data_path)[f'cyclones_{self.data_split}'][0]
 
         # Extract tensors from data
         self.X, self.y, self.track_id = self.extract_data(self.data)

@@ -1,0 +1,3 @@
+north_indian_ocean:
+  train: "raw_data/north_indian_ocean_cyclone/new_northindianocean_train.mat"
+  test: "raw_data/north_indian_ocean_cyclone/new_northindianocean_test.mat"

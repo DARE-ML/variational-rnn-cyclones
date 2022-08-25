@@ -32,7 +32,7 @@ class MarkovSampler(object):
             log_priors[s] = self.model.log_prior()
             log_variational_posterior[s] = self.model.log_variational_posterior()
         
-        # Return if testing
+        # Return output if testing
         if testing:
             return outputs
 

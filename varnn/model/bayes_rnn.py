@@ -27,31 +27,26 @@ class BayesRNN(nn.Module):
         self.w_hh = BayesLinear(hidden_dim, hidden_dim)
         self.w_ho = BayesLinear(hidden_dim, output_dim)
         
-    def forward(self, x, sampling=False):
+    def forward(self, x, h, sampling=False):
         
         # Validate input shape
-        assert len(x.shape)==3, f"Expected input to be 3-dim, got {len(x.shape)}"
-        batch_size, seq_size, feat_size = x.shape
-        
-        # Tensors to store output and hidden state
-        output = torch.zeros(batch_size, self.output_dim)
-        h_prev = torch.zeros(batch_size, self.hidden_dim)
-        
-        for t in range(seq_size):
+        assert len(x.shape)==2, f"Expected input to be 2-dim, got {len(x.shape)}"
 
-            # Select the input at seq `t`
-            x_t = x[:, t]
-
-            # Hidden state
-            h_t = torch.tanh(self.w_ih(x_t, sampling) + self.w_hh(h_prev, sampling))
-
-            # Update previous state
-            h_prev = h_t
+        # Hidden state
+        h_t = torch.tanh(self.w_ih(x, sampling) + self.w_hh(h, sampling))
         
         # Update output
-        output = torch.tanh(self.w_ho(h_t, sampling))
+        o_t = torch.tanh(self.w_ho(h_t, sampling))
 
-        return output
+        return o_t, h_t
+    
+    def init_zero_hidden(self, batch_size=1) -> torch.Tensor:
+        """
+				Helper function.
+        Returns a hidden state with specified batch size. Defaults to 1
+        """
+        return torch.zeros(batch_size, self.hidden_dim, requires_grad=False)
+
     
     def log_prior(self):
         return (

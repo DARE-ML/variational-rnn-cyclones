@@ -6,7 +6,7 @@ import torch.nn as nn
 from ..config import constants
 
 
-class MarkovSampler(object):
+class MarkovSamplingLoss(object):
 
     def __init__(self, model, samples=constants.SAMPLES) -> None:
         self.model = model
@@ -21,25 +21,33 @@ class MarkovSampler(object):
 
         # Define output tensors
         outputs = torch.zeros(self.samples, batch_size, self.model.output_dim)
-        log_priors = torch.zeros(self.samples)
-        log_variational_posterior = torch.zeros(self.samples)
-        
+        log_prior = torch.tensor(0, dtype=torch.float)
+        log_variational_posterior = torch.tensor(0, dtype=torch.float)
+
         # Sample and compute pdfs
         for s in range(self.samples):
-            outputs[s] = self.model(X, sampling=True)
+
+            # Initialize hidden state
+            h_0 = self.model.init_zero_hidden(batch_size=X.shape[0])
+            
+            for t in range(seq_size):
+                o_t, h_t = self.model(X[:, t], h_0, sampling=True)
+                h_0 = h_t
+
+            outputs[s] = o_t
+            
             if testing:
                 continue
-            log_priors[s] = self.model.log_prior()
-            log_variational_posterior[s] = self.model.log_variational_posterior()
+            
+            log_prior += self.model.log_prior()
+            log_variational_posterior += self.model.log_variational_posterior()
         
         # Return output if testing
         if testing:
             return outputs
 
         # Log prior, variational posterior and likelihood
-        log_prior = log_priors.sum()
-        log_variational_posterior = log_variational_posterior.sum()
-        negative_log_likelihood = mse_loss = self.mse(outputs.mean(0), y)
+        negative_log_likelihood = self.mse(outputs.mean(0), y)
         loss = (log_variational_posterior - log_prior + negative_log_likelihood)/num_batches
         
-        return loss, mse_loss, outputs
+        return loss, outputs

@@ -1,6 +1,6 @@
 import os
-from pickletools import optimize
 import torch
+import datetime as dt
 
 from tqdm import tqdm, trange
 
@@ -8,6 +8,8 @@ from torch.utils.data import DataLoader
 from torch.optim import Adam
 
 from torchmetrics import MeanSquaredError
+
+from tensorboardX import SummaryWriter
 
 from varnn.model.bayes_rnn import BayesRNN
 from varnn.utils.markov_sampler import MarkovSamplingLoss
@@ -46,12 +48,19 @@ output_dim = len(dims)
 # Model
 brnn = BayesRNN(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim)
 
+# Tensorboard summary statistics
+run_name = f"{brnn.__class__.__name__}__{ds_name}__{dt.datetime.now().strftime('%Y-%m-%d_%H%M%S')}"
+writer = SummaryWriter(
+                        os.path.join(os.getcwd(), f"runs/{run_name}"), 
+                        comment=f"{brnn.__class__.__name__} for {ds_name}"
+                    )
+
 
 # Train
 def train(model, dataloader, epochs):
     
     # Optimizer
-    optimizer = Adam(model.parameters(), lr=0.1)
+    optimizer = Adam(model.parameters(), lr=0.001)
 
     # MSE Metric
     metric = MeanSquaredError()
@@ -67,6 +76,8 @@ def train(model, dataloader, epochs):
     sampling_loss = MarkovSamplingLoss(brnn)
 
     for epoch in pbar:
+
+        epoch_loss = 0
         
         for seq, labels, tracks in dataloader:
             
@@ -83,7 +94,22 @@ def train(model, dataloader, epochs):
             # Update metric
             metric.update(outputs.mean(dim=0), labels)
 
-        pbar.set_description(f"MSE: {metric.compute():.4f}")
+            # Total loss
+            epoch_loss += loss.detach().numpy()
+
+        # Validation
+        test_mse = evaluate(model, test_dataloader)
+
+        # Write metrics
+        writer.add_scalar('train/loss', epoch_loss, epoch+1)
+        writer.add_scalar('train/mse', metric.compute(), epoch+1)
+        writer.add_scalar('test/mse', test_mse, epoch+1)
+
+        # Update the progress bar
+        pbar.set_description(f"Train Loss: {epoch_loss: .4f} MSE: {metric.compute():.4f} Test MSE: {test_mse:.4f}")
+
+        # Reset metric
+        metric.reset()
 
 
 def evaluate(model, dataloader):
@@ -94,13 +120,13 @@ def evaluate(model, dataloader):
     num_batches = len(dataloader)
 
     # Progress bar
-    pbar = tqdm(enumerate(dataloader), desc=f"Training {model.__class__.__name__}")
+    # pbar = tqdm(, desc=f"Evaluating {model.__class__.__name__}")
     
     # Sampler
     model.eval()
     sampling_loss = MarkovSamplingLoss(brnn)
 
-    for idx, (seq, labels, tracks) in pbar:
+    for idx, (seq, labels, tracks) in enumerate(dataloader):
         
         # Compute sampling loss
         outputs = sampling_loss(seq, labels, num_batches, testing=True)
@@ -108,14 +134,17 @@ def evaluate(model, dataloader):
         # Update metric
         metric.update(outputs.mean(dim=0), labels)
 
-        pbar.set_description(f"MSE: {metric.compute():.4f}")
+    # Compute mse
+    mse = metric.compute()
 
-    
+    # Reset metric
+    metric.reset()
+
+    return mse
     
 
 
 
 train(brnn, dataloader=train_dataloader, epochs=50)
 
-evaluate(brnn, dataloader=test_dataloader)
-
+writer.close()

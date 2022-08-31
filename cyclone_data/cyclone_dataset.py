@@ -44,7 +44,7 @@ class CycloneTracksDataset(Dataset):
         X = X[:, self.dims]
 
         # Scale the data
-        X = (X - self.min)/(self.max - self.min)
+        X = self.normalize(X)
 
         # Add sequences to Xs and ys
         for i in range(len(X)-self.window_size):
@@ -74,7 +74,17 @@ class CycloneTracksDataset(Dataset):
         track_id = torch.tensor(np.concatenate(track_id, axis=0)).type(torch.int)
         
         return X, y, track_id
-    
+
+    def denormalize(self, X):
+        """Unscale data to orginal scale from 0-1
+        """
+        return X * (self.max - self.min) + self.min
+
+    def normalize(self, X):
+        """Scale data between 0 and 1
+        """
+        return (X - self.min) / (self.max - self.min)
+
     def __len__(self):
         return self.X.shape[0]
     

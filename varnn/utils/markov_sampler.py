@@ -28,11 +28,10 @@ class MarkovSamplingLoss(object):
         for s in range(self.samples):
 
             # Initialize hidden state
-            h_0 = self.model.init_zero_hidden(batch_size=X.shape[0])
-            
+            h_t = self.model.init_zero_hidden(batch_size=X.shape[0])
+
             for t in range(seq_size):
-                o_t, h_t = self.model(X[:, t], h_0, sampling=True)
-                h_0 = h_t
+                o_t, h_t = self.model(X[:, t], h_t.detach(), sampling=True)
 
             outputs[s] = o_t
             
@@ -48,6 +47,6 @@ class MarkovSamplingLoss(object):
 
         # Log prior, variational posterior and likelihood
         negative_log_likelihood = self.mse(outputs.mean(0), y)
-        loss = (log_variational_posterior - log_prior + negative_log_likelihood)/num_batches
+        loss = (log_variational_posterior - log_prior)/num_batches + negative_log_likelihood
         
         return loss, outputs

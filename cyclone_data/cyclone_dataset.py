@@ -53,7 +53,6 @@ class CycloneTracksDataset(Dataset):
 
         # Track id
         track_ids = np.full(len(Xs), track_id)
-
         return np.array(Xs), np.array(ys), track_ids
         
     def extract_data(self, data):
@@ -74,6 +73,12 @@ class CycloneTracksDataset(Dataset):
         track_id = torch.tensor(np.concatenate(track_id, axis=0)).type(torch.int)
         
         return X, y, track_id
+
+    def get_track_data(self, track_id):
+        """Get data for given track_id
+        """
+        indices = np.where(self.track_id==track_id)
+        return self.X[indices], self.y[indices]
 
     def denormalize(self, X):
         """Unscale data to orginal scale from 0-1

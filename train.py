@@ -1,6 +1,9 @@
 import os
 import torch
 import datetime as dt
+import numpy as np
+
+import matplotlib.pyplot as plt
 
 from tqdm import tqdm, trange
 
@@ -73,7 +76,7 @@ def train(model, dataloader, epochs):
     
     # Sampler
     model.train()
-    sampling_loss = MarkovSamplingLoss(brnn)
+    sampling_loss = MarkovSamplingLoss(model)
 
     for epoch in pbar:
 
@@ -124,7 +127,7 @@ def evaluate(model, dataloader):
     
     # Sampler
     model.eval()
-    sampling_loss = MarkovSamplingLoss(brnn)
+    sampling_loss = MarkovSamplingLoss(model)
 
     for idx, (seq, labels, tracks) in enumerate(dataloader):
         
@@ -144,7 +147,39 @@ def evaluate(model, dataloader):
     
 
 
+def plot_track_prediction(model, dataset, track_id):
+    """Plot prediction for a track given the id"""
 
-train(brnn, dataloader=train_dataloader, epochs=50)
+    # Track sequences
+    X, y = dataset.get_track_data(track_id)
+
+    # Compute prediction
+    sampling_loss = MarkovSamplingLoss(model)
+    loss, out = sampling_loss(X, y, num_batches=1)
+    y_hat = out.mean(0)
+
+    # Denormalize predictions
+    y = dataset.denormalize(y.detach().numpy())
+    y_hat = dataset.denormalize(y_hat.detach().numpy())
+
+    # Plot
+    fig, ax = plt.subplots(figsize=(10, 10))
+    lat, lon = y[:, 0], y[:, 1]
+    lat_hat, lon_hat = y_hat[:, 0], y_hat[:, 1]
+    ax.scatter(lon, lat, label='True')
+    ax.scatter(lon_hat, lat_hat, label='Pred-Mean')
+    plt.legend()
+    ax.set_xlabel('Longitude (degrees)')
+    ax.set_ylabel('Latitude (degrees)')
+    plt.savefig('plot.png')
+    
+
+
+
+
+train(brnn, dataloader=train_dataloader, epochs=150)
+
+track_id = np.random.choice(test_dataset.track_id.detach().numpy())
+plot_track_prediction(brnn, test_dataset, track_id=track_id)
 
 writer.close()

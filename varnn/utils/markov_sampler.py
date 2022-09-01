@@ -31,7 +31,7 @@ class MarkovSamplingLoss(object):
             h_t = self.model.init_zero_hidden(batch_size=X.shape[0])
 
             for t in range(seq_size):
-                o_t, h_t = self.model(X[:, t], h_t.detach(), sampling=True)
+                o_t, h_t = self.model(X[:, t], h_t, sampling=True)
 
             outputs[s] = o_t
             

@@ -42,7 +42,7 @@ class BayesRNN(nn.Module):
     
     def init_zero_hidden(self, batch_size=1) -> torch.Tensor:
         """
-				Helper function.
+                Helper function.
         Returns a hidden state with specified batch size. Defaults to 1
         """
         return torch.zeros(batch_size, self.hidden_dim, requires_grad=False)

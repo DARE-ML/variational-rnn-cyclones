@@ -3,12 +3,10 @@ from __future__ import absolute_import
 import torch
 import torch.nn as nn
 
-from ..config import constants
-
 
 class MarkovSamplingLoss(object):
 
-    def __init__(self, model, samples=constants.SAMPLES) -> None:
+    def __init__(self, model, samples) -> None:
         self.model = model
         self.samples = samples
         self.mse = nn.MSELoss()

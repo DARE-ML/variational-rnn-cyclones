@@ -21,12 +21,13 @@ from tensorboardX import SummaryWriter
 from varnn.model.bayes_rnn import BayesRNN
 from varnn.utils.markov_sampler import MarkovSamplingLoss
 from cyclone_data import CycloneTracksDataset
+from config import opt
 
 matplotlib.rcParams.update({'font.size': 22})
 
 
 # Train
-def train(model, dataloader, epochs, writer, lr=0.01):
+def train(model, dataloader, epochs, writer, lr, samples):
 
     # Optimizer
     optimizer = Adam(model.parameters(), lr=lr)
@@ -42,7 +43,7 @@ def train(model, dataloader, epochs, writer, lr=0.01):
 
     # Sampler
     model.train()
-    sampling_loss = MarkovSamplingLoss(model)
+    sampling_loss = MarkovSamplingLoss(model, samples=samples)
 
     # Random Track Id
     track_id = np.random.choice(test_dataset.track_id.detach().numpy())
@@ -89,7 +90,7 @@ def train(model, dataloader, epochs, writer, lr=0.01):
         # Reset metric
         metric.reset()
 
-def evaluate(model, dataloader):
+def evaluate(model, sampling_loss, dataloader):
     # MSE Metric
     metric = MeanSquaredError()
 
@@ -101,7 +102,6 @@ def evaluate(model, dataloader):
 
     # Sampler
     model.eval()
-    sampling_loss = MarkovSamplingLoss(model)
 
     for idx, (seq, labels, tracks) in enumerate(dataloader):
 
@@ -119,7 +119,7 @@ def evaluate(model, dataloader):
 
     return mse
 
-def get_track_plot_as_image(model, dataset, track_id):
+def get_track_plot_as_image(model, sampling_loss, dataset, track_id):
     """Plot prediction for a track given the id"""
 
     # Track sequences
@@ -129,7 +129,6 @@ def get_track_plot_as_image(model, dataset, track_id):
     buf = io.BytesIO()
 
     # Compute prediction
-    sampling_loss = MarkovSamplingLoss(model)
     loss, out = sampling_loss(X, y, num_batches=1)
     y_hat = out.mean(0)
 
@@ -161,34 +160,33 @@ def get_track_plot_as_image(model, dataset, track_id):
 if __name__ == "__main__":
 
     # Dataset
-    ds_name = "north_indian_ocean"
-    dims = (1, 2)
-    root_dir = os.path.join(os.getcwd(), "cyclone_data")
+    ds_name = opt.ds_name
+    data_dir = os.path.join(opt.root_dir, "cyclone_data")
     train_dataset = CycloneTracksDataset(
         ds_name, 
-        root_dir, 
+        data_dir, 
         train=True, 
-        dims=dims
+        dims=opt.dims
     )
-    train_dataloader = DataLoader(train_dataset, batch_size=1024)
+    train_dataloader = DataLoader(train_dataset, batch_size=opt.batch_size)
 
     # Test dataset
     train_min_val = train_dataset.min
     train_max_val = train_dataset.max
     test_dataset = CycloneTracksDataset(
         ds_name,
-        root_dir,
+        data_dir,
         train=False,
-        dims=dims,
+        dims=opt.dims,
         min_=train_min_val,
         max_=train_max_val,
     )
-    test_dataloader = DataLoader(test_dataset, batch_size=1024)
+    test_dataloader = DataLoader(test_dataset, batch_size=opt.batch_size)
 
     # Dimensions
-    input_dim = len(dims)
-    hidden_dim = 16
-    output_dim = len(dims)
+    input_dim = len(opt.dims)
+    hidden_dim = opt.hidden
+    output_dim = len(opt.dims)
 
     # Model
     brnn = BayesRNN(
@@ -204,6 +202,12 @@ if __name__ == "__main__":
         comment=f"{brnn.__class__.__name__} for {ds_name}"
     )
 
-    train(brnn, dataloader=train_dataloader, epochs=150, writer=writer)
+    train(
+        brnn, dataloader=train_dataloader, 
+        epochs=opt.epochs, 
+        writer=writer, 
+        lr=opt.lr,
+        samples=opt.samples
+    )
 
     writer.close()

@@ -1,3 +1,12 @@
 north_indian_ocean:
   train: "raw_data/north_indian_ocean_cyclone/new_northindianocean_train.mat"
   test: "raw_data/north_indian_ocean_cyclone/new_northindianocean_test.mat"
+north_west_pacific_ocean:
+  train: "raw_data/north_west_pacific_ocean_cyclone/new_north-westpacificocean_train.mat"
+  test: "raw_data/north_west_pacific_ocean_cyclone/new_north-westpacificocean_test.mat"
+south_indian_ocean:
+  train: "raw_data/south_indian_ocean_hurricane/new_south_indian_hurricane_train.mat"
+  test: "raw_data/south_indian_ocean_hurricane/new_south_indian_hurricane_test.mat"
+south_pacific_ocean:
+  train: "raw_data/south_pacific_ocean_hurricane/new_south_pacific_hurricane_train.mat"
+  test: "raw_data/south_pacific_ocean_hurricane/new_south_pacific_hurricane_test.mat"

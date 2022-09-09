@@ -79,7 +79,7 @@ def train(model, dataloader, epochs, writer, lr, samples):
         writer.add_scalar("test/mse", test_mse, epoch + 1)
 
         # Get track plot as image
-        image = get_track_plot_as_image(brnn, sampling_loss, test_dataset, track_id=track_id)
+        image = get_track_plot_as_image(model, sampling_loss, test_dataset, track_id=track_id)
         writer.add_image(f'Track {track_id}', image, epoch + 1)
 
         # Update the progress bar

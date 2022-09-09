@@ -25,13 +25,7 @@ class MarkovSamplingLoss(object):
         # Sample and compute pdfs
         for s in range(self.samples):
 
-            # Initialize hidden state
-            h_t = self.model.init_zero_hidden(batch_size=X.shape[0])
-
-            for t in range(seq_size):
-                o_t, h_t = self.model(X[:, t], h_t, sampling=True)
-
-            outputs[s] = o_t
+            outputs[s] = self.model(X, sampling=True)
             
             if testing:
                 continue

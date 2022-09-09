@@ -18,7 +18,7 @@ from torchmetrics import MeanSquaredError
 
 from tensorboardX import SummaryWriter
 
-from varnn.model.bayes_rnn import BayesRNN
+from varnn.model import BayesRNN, BayesLSTM
 from varnn.utils.markov_sampler import MarkovSamplingLoss
 from cyclone_data import CycloneTracksDataset
 from config import opt
@@ -71,7 +71,7 @@ def train(model, dataloader, epochs, writer, lr, samples):
             epoch_loss += loss.detach().numpy()
 
         # Validation
-        test_mse = evaluate(model, test_dataloader)
+        test_mse = evaluate(model, sampling_loss, test_dataloader)
 
         # Write metrics
         writer.add_scalar("train/loss", epoch_loss, epoch + 1)
@@ -79,7 +79,7 @@ def train(model, dataloader, epochs, writer, lr, samples):
         writer.add_scalar("test/mse", test_mse, epoch + 1)
 
         # Get track plot as image
-        image = get_track_plot_as_image(brnn, test_dataset, track_id=track_id)
+        image = get_track_plot_as_image(brnn, sampling_loss, test_dataset, track_id=track_id)
         writer.add_image(f'Track {track_id}', image, epoch + 1)
 
         # Update the progress bar
@@ -189,21 +189,30 @@ if __name__ == "__main__":
     output_dim = len(opt.dims)
 
     # Model
-    brnn = BayesRNN(
-        input_dim=input_dim,
-        hidden_dim=hidden_dim,
-        output_dim=output_dim
-    )
+    if opt.model == 'brnn':
+        model = BayesRNN(
+            input_dim=input_dim,
+            hidden_dim=hidden_dim,
+            output_dim=output_dim
+        )
+    elif opt.model == 'blstm':
+        model = BayesLSTM(
+            input_dim=input_dim,
+            hidden_dim=hidden_dim,
+            output_dim=output_dim
+        )
+    else:
+        raise(ValueError('Unknown model type: %s' % opt.model))
 
     # Tensorboard summary statistics
-    run_name = f"{brnn.__class__.__name__}__{ds_name}__{dt.datetime.now().strftime('%Y-%m-%d_%H%M%S')}"
+    run_name = f"{model.__class__.__name__}__{ds_name}__{dt.datetime.now().strftime('%Y-%m-%d_%H%M%S')}"
     writer = SummaryWriter(
         os.path.join(os.getcwd(), f"runs/{run_name}"),
-        comment=f"{brnn.__class__.__name__} for {ds_name}"
+        comment=f"{model.__class__.__name__} for {ds_name}"
     )
 
     train(
-        brnn, dataloader=train_dataloader, 
+        model, dataloader=train_dataloader, 
         epochs=opt.epochs, 
         writer=writer, 
         lr=opt.lr,

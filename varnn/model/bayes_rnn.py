@@ -27,18 +27,29 @@ class BayesRNN(nn.Module):
         self.w_hh = BayesLinear(hidden_dim, hidden_dim)
         self.w_ho = BayesLinear(hidden_dim, output_dim)
         
-    def forward(self, x, h, sampling=False):
+    def forward(self, x, sampling=False):
         
         # Validate input shape
-        assert len(x.shape)==2, f"Expected input to be 2-dim, got {len(x.shape)}"
+        assert len(x.shape)==3, f"Expected input to be 3-dim, got {len(x.shape)}"
 
-        # Hidden state
-        h_t = torch.tanh(self.w_ih(x, sampling) + self.w_hh(h, sampling))
-        
+        # Get dimensions of the input
+        batch_size, seq_size, input_size = x.shape
+
+        # Initialize hidden_state
+        h_t = self.init_zero_hidden(batch_size)
+
+        for t in range(seq_size):
+            
+            # Input at time step t
+            x_t = x[:, t, :]
+
+            # Hidden state
+            h_t = torch.tanh(self.w_ih(x_t, sampling) + self.w_hh(h_t, sampling))
+
         # Update output
-        o_t = torch.tanh(self.w_ho(h_t, sampling))
+        o = torch.tanh(self.w_ho(h_t, sampling))
 
-        return o_t, h_t
+        return o
     
     def init_zero_hidden(self, batch_size=1) -> torch.Tensor:
         """

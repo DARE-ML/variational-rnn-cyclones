@@ -9,8 +9,8 @@ parser = ArgumentParser(description="Train model")
 # Add the parser parameters
 parser.add_argument("--ds-name", type=str, required=True)
 parser.add_argument("--model", 
-                    type=str, default="varnn", 
-                    help="Model to train: rnn, varnn, lstm, varlstm"
+                    type=str, default="brnn", 
+                    help="Model to train: rnn, brnn, lstm, blstm"
                     )
 parser.add_argument("--lr", 
                     type=float, default=0.01, 

@@ -1,4 +1,3 @@
-from asyncore import write
 import os
 import io
 import torch
@@ -17,6 +16,13 @@ from torch.optim import Adam
 from torchmetrics import MeanSquaredError
 
 from tensorboardX import SummaryWriter
+
+# Using R inside python
+import rpy2
+from rpy2.robjects.vectors import FloatArray
+from rpy2.robjects.packages import importr
+rbase = importr('base')
+scoringRules = importr('scoringRules')
 
 from varnn.model import BayesRNN, BayesLSTM
 from varnn.utils.markov_sampler import MarkovSamplingLoss
@@ -149,6 +155,7 @@ def get_track_plot_as_image(model, sampling_loss, dataset, track_id):
     ax.tick_params(axis='both', which='major', labelsize=20)
     ax.tick_params(axis='both', which='minor', labelsize=16)
     plt.savefig(buf, format="png")
+    plt.close()
     buf.seek(0)
 
     # Convert to Image
@@ -156,6 +163,50 @@ def get_track_plot_as_image(model, sampling_loss, dataset, track_id):
     image = transforms.ToTensor()(image)
 
     return image
+
+
+
+
+def evaluate_energy_score(model, samples, dataloader):
+
+    # Number of batches
+    num_batches = len(dataloader)
+    
+    # Sampler
+    model.eval()
+    sampling_loss = MarkovSamplingLoss(model, samples=samples)
+
+    energy_scores = []
+
+    for batch_idx, (seq, labels, tracks) in enumerate(dataloader):
+
+        # Compute sampling loss
+        outputs = sampling_loss(seq, labels, num_batches, testing=True)
+
+        # Evaluate energy score
+        for seq_idx in range(len(labels)):
+
+            # observations
+            obs = labels[seq_idx].detach().numpy().tolist()
+
+            # Samples
+            fc_sample = outputs[:, seq_idx, :].detach().numpy().reshape(len(obs), samples).ravel().tolist()
+
+            # Convert to rtypes
+            obs = FloatArray(obs)
+            fc_sample = rbase.matrix(FloatArray(fc_sample), nrow=len(obs), ncol=samples)
+
+            # Energy scores
+            energy_scores.append(np.asarray(scoringRules.es_sample(y=obs, dat=fc_sample)))
+    
+    return energy_scores
+
+            
+
+
+            
+        
+
 
 if __name__ == "__main__":
 
@@ -218,5 +269,13 @@ if __name__ == "__main__":
         lr=opt.lr,
         samples=opt.samples
     )
+
+    es_list = evaluate_energy_score(
+        model,
+        opt.samples,
+        test_dataloader
+    )
+
+    print(f"Mean Energy Score: {np.concatenate(es_list).mean():.4f}")
 
     writer.close()

@@ -4,7 +4,7 @@ VaRNN provides implementation of Variational Bayes algorithm (inspired by bayes 
 ## Required Packages
 Requires Python 3.7 or later with PyTorch and related libraries. Please refer to requirements.txt for details of python packages required.
 
-**Note**: *The training script uses `rpy2` python package to leverage the `scoringRules` R package to compute energy score metric numerically. This also requires an R language with `scoringRules` installed in the environment to run the training. In our case, R `v3.6` was used.* 
+**Note**: *The training script uses `rpy2` python package to leverage the `scoringRules` R package to compute energy score metric numerically. This also requires an R language installation with `scoringRules` installed in the environment to run the training. In our case, R `v3.6` was used.* 
 
 ## Training the model
 The `train.py` file provides arguments for training the BayesRNN and BayesLSTM models respectively. Here are the details of training arguments available:

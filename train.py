@@ -1,5 +1,6 @@
 import os
 import io
+import json
 import torch
 import datetime as dt
 import numpy as np
@@ -56,6 +57,8 @@ def train(model, dataloader, epochs, writer, lr, samples):
 
     for epoch in pbar:
 
+        # Reset metric
+        metric.reset()
         epoch_loss = 0
 
         for seq, labels, tracks in dataloader:
@@ -77,28 +80,29 @@ def train(model, dataloader, epochs, writer, lr, samples):
             epoch_loss += loss.detach().numpy()
 
         # Validation
-        test_mse = evaluate(model, sampling_loss, test_dataloader)
+        test_mse_mean, test_mse_std = evaluate(model, sampling_loss, test_dataloader)
 
         # Write metrics
         writer.add_scalar("train/loss", epoch_loss, epoch + 1)
         writer.add_scalar("train/mse", metric.compute(), epoch + 1)
-        writer.add_scalar("test/mse", test_mse, epoch + 1)
+        writer.add_scalar("test/mse", test_mse_mean, epoch + 1)
 
-        # Get track plot as image
-        image = get_track_plot_as_image(model, sampling_loss, test_dataset, track_id=track_id)
-        writer.add_image(f'Track {track_id}', image, epoch + 1)
+
+        if opt.features in ('location', 'both'):
+            # Get track plot as image
+            image = get_track_plot_as_image(model, sampling_loss, test_dataset, track_id=track_id)
+            writer.add_image(f'Track {track_id}', image, epoch + 1)
 
         # Update the progress bar
         pbar.set_description(
-            f"Train Loss: {epoch_loss: .4f} MSE: {metric.compute():.4f} Test MSE: {test_mse:.4f}"
+            f"Train Loss: {epoch_loss: .4f} MSE: {metric.compute():.4f} Test MSE: {test_mse_mean:.4f}"
         )
-
-        # Reset metric
-        metric.reset()
+    
+    return metric.compute(), test_mse_mean, test_mse_std
 
 def evaluate(model, sampling_loss, dataloader):
     # MSE Metric
-    metric = MeanSquaredError()
+    metric = [MeanSquaredError() for s in range(sampling_loss.samples)]
 
     # Number of batches
     num_batches = len(dataloader)
@@ -115,15 +119,13 @@ def evaluate(model, sampling_loss, dataloader):
         outputs = sampling_loss(seq, labels, num_batches, testing=True)
 
         # Update metric
-        metric.update(outputs.mean(dim=0), labels)
+        for s in range(sampling_loss.samples):
+            metric[s].update(outputs[s], labels)
 
     # Compute mse
-    mse = metric.compute()
+    mse = torch.tensor([metric[s].compute() for s in range(sampling_loss.samples)])
 
-    # Reset metric
-    metric.reset()
-
-    return mse
+    return float(mse.mean().numpy()), float(mse.std().numpy())
 
 def get_track_plot_as_image(model, sampling_loss, dataset, track_id):
     """Plot prediction for a track given the id"""
@@ -256,13 +258,14 @@ if __name__ == "__main__":
         raise(ValueError('Unknown model type: %s' % opt.model))
 
     # Tensorboard summary statistics
-    run_name = f"{model.__class__.__name__}__{ds_name}__{dt.datetime.now().strftime('%Y-%m-%d_%H%M%S')}"
+    run_name = f"{model.__class__.__name__}__{ds_name}__{opt.features}__{dt.datetime.now().strftime('%Y-%m-%d_%H%M%S')}"
+    run_path = os.path.join(os.getcwd(), f"runs/{run_name}")
     writer = SummaryWriter(
-        os.path.join(os.getcwd(), f"runs/{run_name}"),
-        comment=f"{model.__class__.__name__} for {ds_name}"
+        run_path,
+        comment=f"{model.__class__.__name__} for {opt.features} features in {ds_name}"
     )
 
-    train(
+    train_mse, test_mse_mean, test_mse_std = train(
         model, dataloader=train_dataloader, 
         epochs=opt.epochs, 
         writer=writer, 
@@ -270,12 +273,46 @@ if __name__ == "__main__":
         samples=opt.samples
     )
 
+    sampling_loss = MarkovSamplingLoss(model, opt.samples)
+
+    train_mse_mean, train_mse_std = evaluate(
+        model=model,
+        sampling_loss=sampling_loss,
+        dataloader=train_dataloader
+    )
+
+    # Evaluate test sample energy score
     es_list = evaluate_energy_score(
         model,
         opt.samples,
         test_dataloader
     )
 
-    print(f"Mean Energy Score: {np.concatenate(es_list).mean():.4f}")
+    # Test mean energy score
+    es_mean = np.concatenate(es_list).mean()
+    print(f"Mean Energy Score: {es_mean:.4f}")
+
+    # Save results to path
+    results = [
+        {
+            'model': model.__class__.__name__,
+            'ds_name': ds_name,
+            'run_name': run_name,
+            'train_mse': {
+                "mean": train_mse_mean,
+                "std": train_mse_std
+            },
+            'test_mse': {
+                "mean": test_mse_mean, 
+                "std": test_mse_std
+            },
+            'energy_score': es_mean
+        }
+    ]
+
+    result_file = os.path.join(run_path, 'results.json')
+    with open(result_file, 'w') as f:
+        json.dump(results, f, indent=4)
+        
 
     writer.close()

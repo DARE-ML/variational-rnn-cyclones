@@ -50,7 +50,7 @@ opt = parser.parse_args()
 if opt.features == "location":
     opt.dims = (1, 2)
 elif opt.features == "intensity":
-    opt.dims = (3)
+    opt.dims = (3,)
 elif opt.features == "both":
     opt.dims = (1, 2, 3)
 else:

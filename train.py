@@ -53,6 +53,11 @@ def train(model, dataloader, epochs, writer, lr, samples):
     # Random Track Id
     track_id = np.random.choice(test_dataset.track_id.detach().numpy())
 
+    # Early stopping
+    patience = 2
+    trigger_times = 0
+    min_delta = 0.007
+
     for epoch in pbar:
 
         # Reset metric
@@ -78,12 +83,14 @@ def train(model, dataloader, epochs, writer, lr, samples):
             epoch_loss += loss.detach().numpy()
 
         # Validation
-        test_mse_mean, test_mse_std = evaluate(model, sampling_loss, test_dataloader)
+        test_rmse_mean, test_rmse_std = evaluate(model, sampling_loss, test_dataloader)
+        train_rmse = torch.sqrt(metric.compute())
+
 
         # Write metrics
         writer.add_scalar("train/loss", epoch_loss, epoch + 1)
-        writer.add_scalar("train/mse", metric.compute(), epoch + 1)
-        writer.add_scalar("test/mse", test_mse_mean, epoch + 1)
+        writer.add_scalar("train/rmse", train_rmse, epoch + 1)
+        writer.add_scalar("test/rmse", test_rmse_mean, epoch + 1)
 
 
         if opt.features in ('location', 'both'):
@@ -93,10 +100,21 @@ def train(model, dataloader, epochs, writer, lr, samples):
 
         # Update the progress bar
         pbar.set_description(
-            f"Train Loss: {epoch_loss: .4f} MSE: {metric.compute():.4f} Test MSE: {test_mse_mean:.4f}"
+            f"Train Loss: {epoch_loss: .4f} RMSE: {train_rmse:.4f} Test RMSE: {test_rmse_mean:.4f} + {test_rmse_std:.4f}"
         )
-    
-    return metric.compute(), test_mse_mean, test_mse_std
+
+        # Early stopping
+        if (test_rmse_mean - train_rmse) > min_delta:
+            trigger_times += 1
+
+            if trigger_times >= patience:
+                print('Early stopping!\n')
+                return train_rmse, test_rmse_mean, test_rmse_std
+
+        else:
+            trigger_times = 0
+
+    return train_rmse, test_rmse_mean, test_rmse_std
 
 def evaluate(model, sampling_loss, dataloader):
     # MSE Metric
@@ -121,9 +139,9 @@ def evaluate(model, sampling_loss, dataloader):
             metric[s].update(outputs[s], labels)
 
     # Compute mse
-    mse = torch.tensor([metric[s].compute() for s in range(sampling_loss.samples)])
+    rmse = torch.sqrt(torch.tensor([metric[s].compute() for s in range(sampling_loss.samples)]))
 
-    return float(mse.mean().numpy()), float(mse.std().numpy())
+    return float(rmse.mean().numpy()), float(rmse.std().numpy())
 
 def get_track_plot_as_image(model, sampling_loss, dataset, track_id):
     """Plot prediction for a track given the id"""
@@ -254,7 +272,7 @@ if __name__ == "__main__":
         comment=f"{model.__class__.__name__} for {opt.features} features in {ds_name}"
     )
 
-    train_mse, test_mse_mean, test_mse_std = train(
+    train_rmse, test_rmse_mean, test_rmse_std = train(
         model, dataloader=train_dataloader, 
         epochs=opt.epochs, 
         writer=writer, 
@@ -264,22 +282,30 @@ if __name__ == "__main__":
 
     sampling_loss = MarkovSamplingLoss(model, opt.samples)
 
-    train_mse_mean, train_mse_std = evaluate(
+    train_rmse_mean, train_rmse_std = evaluate(
         model=model,
         sampling_loss=sampling_loss,
         dataloader=train_dataloader
     )
 
-    # Evaluate test sample energy score
-    es_list = evaluate_energy_score(
+    # Evaluate energy score
+    es_train_list = evaluate_energy_score(
+        model,
+        opt.samples,
+        train_dataloader
+    )
+
+    es_test_list = evaluate_energy_score(
         model,
         opt.samples,
         test_dataloader
     )
 
-    # Test mean energy score
-    es_mean = np.concatenate(es_list).mean()
-    print(f"Mean Energy Score: {es_mean:.4f}")
+    # Mean energy score
+    es_train_mean = np.concatenate(es_train_list).mean()
+    print(f"Mean Energy Score: {es_train_mean:.4f}")
+    es_test_mean = np.concatenate(es_test_list).mean()
+    print(f"Mean Energy Score: {es_test_mean:.4f}")
 
     # Save results to path
     results = [
@@ -287,15 +313,16 @@ if __name__ == "__main__":
             'model': model.__class__.__name__,
             'ds_name': ds_name,
             'run_name': run_name,
-            'train_mse': {
-                "mean": train_mse_mean,
-                "std": train_mse_std
+            'train_rmse': {
+                "mean": train_rmse_mean,
+                "std": train_rmse_std
             },
-            'test_mse': {
-                "mean": test_mse_mean, 
-                "std": test_mse_std
+            'test_rmse': {
+                "mean": test_rmse_mean, 
+                "std": test_rmse_std
             },
-            'energy_score': es_mean
+            'train_es': es_train_mean,
+            'test_es': es_test_mean
         }
     ]
 

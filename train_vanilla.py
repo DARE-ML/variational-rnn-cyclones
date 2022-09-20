@@ -279,6 +279,15 @@ if __name__ == "__main__":
     print(f"Test RMSE: {test_rmse_mean:.6f} + {test_rmse_std:.6f}")
 
     # Evaluate test sample energy score
+    train_es = evaluate_energy_score(
+        models,
+        train_dataloader
+    )
+
+    # Test mean energy score
+    print(f"Train Energy Score: {train_es:.4f}")
+
+    # Evaluate test sample energy score
     test_es = evaluate_energy_score(
         models,
         test_dataloader
@@ -294,13 +303,15 @@ if __name__ == "__main__":
             'ds_name': ds_name,
             'run_name': run_name,
             'train_rmse': {
-                "mean": train_rmse_mean,
-                "std": train_rmse_std
+                'mean': train_rmse_mean,
+                'std': train_rmse_std
             },
             'test_rmse': {
-                "mean": test_rmse_mean, 
-                "std": test_rmse_std
+                'mean': test_rmse_mean,
+                'std': test_rmse_std
             },
+            'train_es': train_es,
+            'test_es': test_es
         }
     ]
 

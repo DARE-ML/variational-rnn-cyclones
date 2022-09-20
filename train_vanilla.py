@@ -241,7 +241,7 @@ if __name__ == "__main__":
             )
             for s in range(opt.samples)
         ]
-    if opt.model == 'lstm':
+    elif opt.model == 'lstm':
         models = [
             VanillaLSTM(
                 input_dim=input_dim,

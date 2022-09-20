@@ -54,9 +54,9 @@ def train(model, dataloader, epochs, writer, lr, samples):
     track_id = np.random.choice(test_dataset.track_id.detach().numpy())
 
     # Early stopping
-    patience = 2
+    patience = 10
     trigger_times = 0
-    min_delta = 0.007
+    min_delta = 0.02
 
     for epoch in pbar:
 
@@ -86,12 +86,10 @@ def train(model, dataloader, epochs, writer, lr, samples):
         test_rmse_mean, test_rmse_std = evaluate(model, sampling_loss, test_dataloader)
         train_rmse = torch.sqrt(metric.compute())
 
-
         # Write metrics
         writer.add_scalar("train/loss", epoch_loss, epoch + 1)
         writer.add_scalar("train/rmse", train_rmse, epoch + 1)
         writer.add_scalar("test/rmse", test_rmse_mean, epoch + 1)
-
 
         if opt.features in ('location', 'both'):
             # Get track plot as image
@@ -106,11 +104,9 @@ def train(model, dataloader, epochs, writer, lr, samples):
         # Early stopping
         if (test_rmse_mean - train_rmse) > min_delta:
             trigger_times += 1
-
             if trigger_times >= patience:
                 print('Early stopping!\n')
                 return train_rmse, test_rmse_mean, test_rmse_std
-
         else:
             trigger_times = 0
 

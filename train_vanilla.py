@@ -35,29 +35,29 @@ from config import opt
 
 matplotlib.rcParams.update({'font.size': 22})
 
-def train(model, dataloader, epochs, writer, lr, samples):
-
-    # Optimizer
-    optimizer = Adam(model.parameters(), lr=lr)
+def train(models, dataloader, epochs, writer, lr, samples):
 
     # MSE Metric
     metric = MeanSquaredError()
     mse_loss = nn.MSELoss()
 
-    # Random Track Id
-    track_id = np.random.choice(test_dataset.track_id.detach().numpy())
+    # MSE
+    train_rmse_list = torch.zeros(samples)
+    test_rmse_list = torch.zeros(samples)
 
-    for sample in range(1, samples+1):
+    for sample in range(0, samples):
+
+        # Model to train
+        model = models[sample]
+        
+        # Optimizer
+        optimizer = Adam(model.parameters(), lr=lr)
 
         print(f"Model: {model.__class__.__name__} Sample: {sample}")
 
         # Sampler
         model.init_weights()
         model.train()
-
-        # MSE
-        train_mse_list = torch.zeros(samples)
-        test_mse_list = torch.zeros(samples)
 
         # Progress bar
         pbar = trange(epochs, desc=f"Training {model.__class__.__name__}")
@@ -88,29 +88,28 @@ def train(model, dataloader, epochs, writer, lr, samples):
                 epoch_loss += loss.detach().numpy()
 
             # Validation
-            test_mse = evaluate(model, test_dataloader)
-
-            # Write metrics
-            # writer.add_scalar("train/loss", epoch_loss, epoch + 1)
-            # writer.add_scalar("train/mse", metric.compute(), epoch + 1)
-            # writer.add_scalar("test/mse", test_mse, epoch + 1)
-
-
-            # if opt.features in ('location', 'both'):
-            #     # Get track plot as image
-            #     image = get_track_plot_as_image(model, sampling_loss, test_dataset, track_id=track_id)
-            #     writer.add_image(f'Track {track_id}', image, epoch + 1)
+            test_rmse = evaluate(model, test_dataloader)
+            train_rmse = torch.sqrt(metric.compute())
 
             # Update the progress bar
             pbar.set_description(
-                f"Train Loss: {epoch_loss: .4f} MSE: {metric.compute():.4f} Test MSE: {test_mse:.4f}"
+                f"Train Loss: {epoch_loss: .4f} RMSE: {train_rmse:.4f} Test RMSE: {test_rmse:.4f}"
             )
 
-            # Append MSE
-            train_mse_list[sample-1] = metric.compute()
-            test_mse_list[sample-1] = test_mse
-        
-    return train_mse_list, test_mse_list
+        # Append MSE
+        train_rmse_list[sample] = train_rmse
+        test_rmse_list[sample] = test_rmse
+
+        # Update model
+        models[sample] = model
+
+    # RMSE
+    train_rmse_mean = train_rmse_list.mean().detach().numpy()
+    train_rmse_std = train_rmse_list.std().detach().numpy()
+    test_rmse_mean = test_rmse_list.mean().detach().numpy()
+    test_rmse_std = test_rmse_list.std().detach().numpy()
+
+    return models, float(train_rmse_mean), float(train_rmse_std), float(test_rmse_mean), float(test_rmse_std)
 
 def evaluate(model, dataloader):
 
@@ -122,85 +121,81 @@ def evaluate(model, dataloader):
     for idx, (seq, labels, tracks) in enumerate(dataloader):
 
         # Output
-        outputs = model(seq)
+        out = model(seq)
 
         # Update metric
-        metric.update(outputs, labels)
+        metric.update(out, labels)
 
-    return metric.compute()
+    # Compute RMSE
+    rmse = torch.sqrt(metric.compute())
 
-def get_track_plot_as_image(model, sampling_loss, dataset, track_id):
-    """Plot prediction for a track given the id"""
+    return rmse
 
-    # Track sequences
-    X, y = dataset.get_track_data(track_id)
 
-    # Buffer
-    buf = io.BytesIO()
-
-    # Compute prediction
-    loss, out = sampling_loss(X, y, num_batches=1)
-    y_hat = out.mean(0)
-
-    # Denormalize predictions
-    y = dataset.denormalize(y.detach().numpy())
-    y_hat = dataset.denormalize(y_hat.detach().numpy())
-
-    # Plot
-    fig, ax = plt.subplots(figsize=(8, 8))
-    lat, lon = y[:, 0], y[:, 1]
-    lat_hat, lon_hat = y_hat[:, 0], y_hat[:, 1]
-    ax.scatter(lon, lat, label="True")
-    ax.scatter(lon_hat, lat_hat, label="Pred-Mean")
-    plt.legend()
-    ax.set_xlabel("Longitude (degrees)")
-    ax.set_ylabel("Latitude (degrees)")
-    # We change the fontsize of minor ticks label 
-    ax.tick_params(axis='both', which='major', labelsize=20)
-    ax.tick_params(axis='both', which='minor', labelsize=16)
-    plt.savefig(buf, format="png")
-    plt.close()
-    buf.seek(0)
-
-    # Convert to Image
-    image = Image.open(buf)
-    image = transforms.ToTensor()(image)
-
-    return image
-
-def evaluate_energy_score(model, samples, dataloader):
-
-    # Number of batches
-    num_batches = len(dataloader)
+def evaluate_energy_score(models, dataloader):
     
-    # Sampler
-    model.eval()
-    sampling_loss = MarkovSamplingLoss(model, samples=samples)
+    # Number of models in ensemble
+    samples = len(models)
 
-    energy_scores = []
+    # List to store outputs
+    ensemble_out_list = []
+    label_list = []
 
-    for batch_idx, (seq, labels, tracks) in enumerate(dataloader):
+    for sample, model in enumerate(models):
 
-        # Compute sampling loss
-        outputs = sampling_loss(seq, labels, num_batches, testing=True)
+        # Sampler
+        model.eval()
 
-        # Evaluate energy score
-        for seq_idx in range(len(labels)):
+        out_list = []
 
-            # observations
-            obs = labels[seq_idx].detach().numpy().tolist()
+        for batch_idx, (seq, labels, tracks) in enumerate(dataloader):
 
-            # Samples
-            fc_sample = outputs[:, seq_idx, :].detach().numpy().reshape(len(obs), samples).ravel().tolist()
+            # Predict labels
+            out = model(seq)
 
-            # Convert to rtypes
-            obs = FloatArray(obs)
-            fc_sample = rbase.matrix(FloatArray(fc_sample), nrow=len(obs), ncol=samples)
+            # Add to list
+            out_list.append(out)
 
-            # Energy scores
-            energy_scores.append(np.asarray(scoringRules.es_sample(y=obs, dat=fc_sample)))
+            if sample == 0:
+                label_list.append(labels)
+
+        # Append sample outputs to ensemble
+        sample_outputs = torch.concat(out_list)
+        ensemble_out_list.append(sample_outputs)
+                
+    # Concat the outputs from the ensemble
+    ensemble_out_list = torch.stack(ensemble_out_list)
+    label_list = torch.concat(label_list)
+
+    # Energy scores per sample
+    es_list = []
+
+    # Evaluate energy score
+    for seq_idx in range(len(label_list)):
+
+        # observations
+        obs = label_list[seq_idx].detach().numpy().tolist()
+
+        # Samples
+        fc_sample = ensemble_out_list[:, seq_idx, :].detach().numpy().reshape(len(obs), samples).ravel().tolist()
+
+        # Convert to rtypes
+        obs = FloatArray(obs)
+        fc_sample = rbase.matrix(FloatArray(fc_sample), nrow=len(obs), ncol=samples)
+
+        # Energy scores
+        es_list.append(np.asarray(scoringRules.es_sample(y=obs, dat=fc_sample)))
     
-    return energy_scores
+    return np.mean(es_list)
+
+
+def remove_outliers(x):
+    """Remove outlier samples"""
+    q1, q3 = np.quantile(x, [0.25, 0.75])
+    iqr = q3 - q1
+    up = q3 + 1.5 * iqr
+    low = q1 - 1.5 * iqr
+    return x[(x > low) & (x < up)]
 
 
 if __name__ == "__main__":
@@ -238,80 +233,80 @@ if __name__ == "__main__":
 
     # Model
     if opt.model == 'rnn':
-        model = VanillaRNN(
-            input_dim=input_dim,
-            hidden_dim=hidden_dim,
-            output_dim=output_dim
-        )
+        models = [
+            VanillaRNN(
+                input_dim=input_dim,
+                hidden_dim=hidden_dim,
+                output_dim=output_dim
+            )
+            for s in range(opt.samples)
+        ]
     if opt.model == 'lstm':
-        model = VanillaLSTM(
-            input_dim=input_dim,
-            hidden_dim=hidden_dim,
-            output_dim=output_dim
-        )
+        models = [
+            VanillaLSTM(
+                input_dim=input_dim,
+                hidden_dim=hidden_dim,
+                output_dim=output_dim
+            )
+            for s in range(opt.samples)
+        ]
     else:
         raise(ValueError('Unknown model type: %s' % opt.model))
 
     # Tensorboard summary statistics
-    run_name = f"{model.__class__.__name__}__{ds_name}__{opt.features}__{dt.datetime.now().strftime('%Y-%m-%d_%H%M%S')}"
+    run_name = f"{models[0].__class__.__name__}__{ds_name}__{opt.features}__{dt.datetime.now().strftime('%Y-%m-%d_%H%M%S')}"
     run_path = os.path.join(os.getcwd(), f"runs/{run_name}")
     writer = SummaryWriter(
         run_path,
-        comment=f"{model.__class__.__name__} for {opt.features} features in {ds_name}"
+        comment=f"{models[0].__class__.__name__} for {opt.features} features in {ds_name}"
     )
 
-    train_mse, test_mse = train(
-        model, dataloader=train_dataloader, 
+    res = train(
+        models, dataloader=train_dataloader, 
         epochs=opt.epochs, 
         writer=writer, 
         lr=opt.lr,
         samples=opt.samples
     )
 
-    print(f"Train MSE: {train_mse.mean():.6f} + {train_mse.std():.6f}")
-    print(f"Test MSE: {test_mse.mean():.6f} + {test_mse.std():.6f}")
-    
+    models, train_rmse_mean, train_rmse_std, test_rmse_mean, test_rmse_std = res
 
-    # sampling_loss = MarkovSamplingLoss(model, opt.samples)
+    # ## Remove outliers
+    # train_mse = remove_outliers(train_rmse)
+    # test_mse = remove_outliers(test_rmse)
 
-    # train_mse_mean, train_mse_std = evaluate(
-    #     model=model,
-    #     sampling_loss=sampling_loss,
-    #     dataloader=train_dataloader
-    # )
+    print(f"Train RMSE: {train_rmse_mean:.6f} + {train_rmse_std:.6f}")
+    print(f"Test RMSE: {test_rmse_mean:.6f} + {test_rmse_std:.6f}")
 
-    # # Evaluate test sample energy score
-    # es_list = evaluate_energy_score(
-    #     model,
-    #     opt.samples,
-    #     test_dataloader
-    # )
+    # Evaluate test sample energy score
+    test_es = evaluate_energy_score(
+        models,
+        test_dataloader
+    )
 
-    # # Test mean energy score
-    # es_mean = np.concatenate(es_list).mean()
-    # print(f"Mean Energy Score: {es_mean:.4f}")
+    # Test mean energy score
+    print(f"Mean Energy Score: {test_es:.4f}")
 
-    # # Save results to path
-    # results = [
-    #     {
-    #         'model': model.__class__.__name__,
-    #         'ds_name': ds_name,
-    #         'run_name': run_name,
-    #         'train_mse': {
-    #             "mean": train_mse_mean,
-    #             "std": train_mse_std
-    #         },
-    #         'test_mse': {
-    #             "mean": test_mse_mean, 
-    #             "std": test_mse_std
-    #         },
-    #         'energy_score': es_mean
-    #     }
-    # ]
+    # Save results to path
+    results = [
+        {
+            'model': models[0].__class__.__name__,
+            'ds_name': ds_name,
+            'run_name': run_name,
+            'train_rmse': {
+                "mean": train_rmse_mean,
+                "std": train_rmse_std
+            },
+            'test_rmse': {
+                "mean": test_rmse_mean, 
+                "std": test_rmse_std
+            },
+        }
+    ]
 
-    # result_file = os.path.join(run_path, 'results.json')
-    # with open(result_file, 'w') as f:
-    #     json.dump(results, f, indent=4)
+    result_file = os.path.join(run_path, 'results.json')
+    with open(result_file, 'w') as f:
+        json.dump(results, f, indent=4)
         
 
     writer.close()

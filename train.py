@@ -56,7 +56,7 @@ def train(model, dataloader, epochs, writer, lr, samples):
     # Early stopping
     patience = 10
     trigger_times = 0
-    min_delta = 0.02
+    min_delta = 0.1
 
     for epoch in pbar:
 
@@ -326,5 +326,9 @@ if __name__ == "__main__":
     with open(result_file, 'w') as f:
         json.dump(results, f, indent=4)
         
+    
+    # Save the model
+    model_path = os.path.join(run_path, 'model')
+    torch.save(model, model_path)
 
     writer.close()

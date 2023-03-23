@@ -29,7 +29,6 @@ scoringRules = importr('scoringRules')
 
 from varnn.model import (VanillaRNN,
                         VanillaLSTM)
-from varnn.utils.markov_sampler import MarkovSamplingLoss
 from cyclone_data import CycloneTracksDataset
 from config import opt
 
@@ -241,7 +240,7 @@ if __name__ == "__main__":
             )
             for s in range(opt.samples)
         ]
-    if opt.model == 'lstm':
+    elif opt.model == 'lstm':
         models = [
             VanillaLSTM(
                 input_dim=input_dim,
@@ -318,6 +317,10 @@ if __name__ == "__main__":
     result_file = os.path.join(run_path, 'results.json')
     with open(result_file, 'w') as f:
         json.dump(results, f, indent=4)
-        
+    
+
+    # Save a random model
+    model_path = os.path.join(run_path, 'model')
+    torch.save(models[np.random.randint(opt.samples)], model_path)
 
     writer.close()

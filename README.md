@@ -32,3 +32,23 @@ optional arguments:
 ## Data
 
 The data used in this implementation is available [here](https://github.com/sydney-machine-learning/cyclonedatasets)
+
+
+Sample cyclone tracks from north indian ocean:
+
+![sample_tracks](https://raw.githubusercontent.com/DARE-ML/variational-rnn-cyclones/main/plots/north_indian_ocean_tracks.png)
+
+
+## Citing this work
+
+```
+@article{kapoor2023cyclone,
+  title={Cyclone trajectory and intensity prediction with uncertainty quantification using variational recurrent neural networks},
+  author={Kapoor, Arpit and Negi, Anshul and Marshall, Lucy and Chandra, Rohitash},
+  journal={Environmental Modelling \& Software},
+  volume={162},
+  pages={105654},
+  year={2023},
+  publisher={Elsevier}
+}
+```
